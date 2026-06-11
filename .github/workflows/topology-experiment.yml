@@ -1,0 +1,111 @@
+name: Topology Experiment Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_files:
+        description: "Max files to label"
+        required: true
+        default: 100
+        type: number
+      epochs:
+        description: "Training epochs"
+        required: true
+        default: 10
+        type: number
+      ollama_model:
+        description: "Ollama model for teacher"
+        default: "qwen2.5-coder:7b"
+        type: string
+
+env:
+  OLLAMA_HOST: "http://localhost:11434"
+  OLLAMA_MODEL: ${{ inputs.ollama_model || 'qwen2.5-coder:7b' }}
+
+jobs:
+  setup-and-run:
+    runs-on: [self-hosted, gpu]  # 你的 GPU 机器的标签
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+      - name: Verify GPU
+        run: python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}, Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"CPU\"}')"
+
+      - name: Verify Ollama
+        run: |
+          curl -s ${{ env.OLLAMA_HOST }}/api/tags | python -c "import json,sys; d=json.load(sys.stdin); print('Models:', [m['name'] for m in d.get('models',[])])"
+
+      - name: Pull teacher model if needed
+        run: ollama pull ${{ env.OLLAMA_MODEL }}
+
+      - name: Run teacher labeling
+        run: |
+          python -m src.topology_experiment label src \
+            --max-files ${{ inputs.max_files || 100 }} \
+            --output teacher_labels.json
+
+      - name: Upload labels
+        uses: actions/upload-artifact@v4
+        with:
+          name: teacher-labels
+          path: teacher_labels.json
+          retention-days: 30
+
+      - name: Train topology paths
+        run: |
+          python -m src.topology_experiment train teacher_labels.json \
+            --paths cnn rnn gnn \
+            --epochs ${{ inputs.epochs || 10 }} \
+            --lr 5e-4
+
+      - name: Run baseline comparison
+        run: |
+          python -c "
+          import json, glob, os
+          from src.topology_experiment import Config, ExperimentRunner
+          config = Config()
+          runner = ExperimentRunner(config)
+
+          results = []
+          for f in glob.glob('src/**/*.py', recursive=True)[:20]:
+              try:
+                  r = runner.compare_paths(f)
+                  results.append(r)
+              except Exception as e:
+                  print(f'  SKIP {f}: {e}')
+
+          with open('comparison_results.json', 'w') as f:
+              json.dump(results, f, indent=2, default=str)
+          "
+
+      - name: Upload comparison results
+        uses: actions/upload-artifact@v4
+        with:
+          name: experiment-results
+          path: comparison_results.json
+          retention-days: 30
+
+      - name: Print summary
+        run: |
+          python -c "
+          import json
+          with open('comparison_results.json') as f:
+              data = json.load(f)
+          for r in data:
+              print(f\"File: {r.get('file','?')}  Issues: {r.get('total_issues',0)}\")
+          "

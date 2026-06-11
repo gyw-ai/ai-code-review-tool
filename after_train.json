@@ -1,0 +1,39 @@
+{
+  "file": "src/agents/gpt_agent.py",
+  "language": "py",
+  "total_latency_ms": 208.9240550994873,
+  "n_functions": 1,
+  "n_lines": 105,
+  "n_tokens": 1059,
+  "total_issues": 1,
+  "merged_issues": [
+    {
+      "file": "src/agents/gpt_agent.py",
+      "line": 87,
+      "severity": "low",
+      "category": "风格",
+      "description": "行过长 (>120字符)",
+      "source": "CNN_path"
+    }
+  ],
+  "path_results": [
+    {
+      "path": "cnn",
+      "weight": 0.7,
+      "n_issues": 1,
+      "latency_ms": 27.052879333496094
+    },
+    {
+      "path": "rnn",
+      "weight": 0.7,
+      "n_issues": 0,
+      "latency_ms": 130.40828704833984
+    },
+    {
+      "path": "gnn",
+      "weight": 0.7,
+      "n_issues": 0,
+      "latency_ms": 29.918909072875977
+    }
+  ]
+}

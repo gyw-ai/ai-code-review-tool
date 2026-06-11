@@ -1,0 +1,16 @@
+*.pyc
+__pycache__/
+*.egg-info/
+dist/
+build/
+.vscode/
+.idea/
+*.result.json
+teacher_labels.json
+comparison_results.json
+experiment_results.json
+notification_data.json
+gpt_result.json
+claude_result.json
+trained_models/
+*.pt
